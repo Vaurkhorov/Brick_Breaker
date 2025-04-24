@@ -88,27 +88,27 @@ void plot() {
 
 
 // BRICK START
-constexpr int brick_length = 200;
-constexpr int brick_width = 20;
+constexpr int brick_length = 2000;
+constexpr int brick_width = 200;
 
-constexpr int ortho_x = 1000;
-constexpr int ortho_y = 1000;
+constexpr int ortho_x = 10000;
+constexpr int ortho_y = 10000;
 
-constexpr int default_player_length = 200;
+constexpr int default_player_length = 2000;
 int player_length = default_player_length;
 constexpr int player_x_min = 0;
 std::function<int()> player_x_max = []() -> int {
 	return ortho_x - player_length;
 	};
-constexpr int player_step = 3;
+constexpr int player_step = 30;
 
 constexpr int green_powerup_length_difference = default_player_length;
 constexpr int green_powerup_duration = 10;
 
 constexpr int bricks_start_y = ortho_y * 0.6;
 
-int player_x = 450;
-int player_y = 100;
+int player_x = 4500;
+int player_y = 1000;
 
 int draw_delay = 2;
 
@@ -125,13 +125,13 @@ PlayerState player_state = PlayerState::Still;
 struct breaker {
 	int size = 10;
 
-	int x = 500;
-	int y = 500;
+	int x = 5000;
+	int y = 5000;
 
 	bool down = false;
-	PlayerState direction = PlayerState::Still;
+	int direction = 0;
 
-	int step = 2;
+	int step = 20;
 
 	// colours
 	float r = 1.0;
@@ -142,7 +142,7 @@ struct breaker {
 struct game_state {
 	bool eww_this_isnt_functional = true;
 
-	int player_step = 2;
+	int player_step = 20;
 
 	int slow_bounce = 0;
 	int big_player = 0;
@@ -188,27 +188,29 @@ struct BreakeableBricks {
 void larry_go() {
 	larry.y += larry.down ? (-larry.step) : (+larry.step);
 
-	switch (larry.direction) {
-	case PlayerState::Left:
-		larry.x -= larry.step;
-		break;
-	case PlayerState::Right:
-		larry.x += larry.step;
-		break;
-	default:
-		break;
-	}
+	larry.x += larry.direction;
+
+	//switch (larry.direction) {
+	//case PlayerState::Left:
+	//	larry.x -= larry.step;
+	//	break;
+	//case PlayerState::Right:
+	//	larry.x += larry.step;
+	//	break;
+	//default:
+	//	break;
+	//}
 
 	//larry.x += (larry.direction == PlayerState::Left) ? (-larry.step) : (larry.step);
 
 	if (larry.x < 0) {
 		larry.x = 0;
-		larry.direction = PlayerState::Right;
+		larry.direction *= -1;
 	}
 
 	if (larry.x > ortho_x - larry.size) {
 		larry.x = ortho_x - larry.size;
-		larry.direction = PlayerState::Left;
+		larry.direction *= -1;
 	}
 
 	if (larry.y > ortho_y - larry.size) {
@@ -224,18 +226,20 @@ void larry_go() {
 		return;
 	}
 
-	if (!game_over && larry.y == player_y + larry.size) {
+	if (!game_over && larry.y <= player_y + larry.size * 10 && larry.y >= player_y - larry.size * 5) {
 		if (larry.x > player_x && larry.x < player_x + player_length) {
 			if (larry.down) larry.down = false;
 
-			if (larry.x > player_x + player_length / 2) larry.direction = PlayerState::Right;
-			else larry.direction = PlayerState::Left;
+			larry.direction = (larry.x - (player_x + player_length / 2)) * 70 / player_length;
+
+			//if (larry.x > player_x + player_length / 2) larry.direction = PlayerState::Right;
+			//else larry.direction = PlayerState::Left;
 		}
 	}
 
 	if (larry.y >= bricks_start_y) {
-		if ((larry.y - ortho_y) % brick_width == 0) {
-			auto pair_to_check = std::make_pair(((larry.x / brick_length) * brick_length), larry.y);
+		if ((larry.y - bricks_start_y) % brick_width <= 50 || (larry.y - bricks_start_y) % brick_width >= brick_width - 50) {
+			auto pair_to_check = std::make_pair(((larry.x / brick_length) * brick_length), larry.y / brick_width * brick_width);
 			auto it = bricks_to_break.bricks.find(pair_to_check);
 			if (it != bricks_to_break.bricks.end()) {
 				the_state.hit();
@@ -263,17 +267,20 @@ void player_move() {
 void setup_game() {
 	glPointSize(larry.size);
 
-	player_x = 450;
-	player_y = 100;
+	player_x = 4500;
+	player_y = 1000;
+	player_length = default_player_length;
 
-	larry.x = 500;
-	larry.y = 500;
+	the_state = game_state();
+
+	larry.x = 5000;
+	larry.y = 5000;
 	larry.down = false;
 	larry.r = 1.0;
 	larry.g = 1.0;
 	larry.b = 1.0;
-	larry.direction = PlayerState::Still;
-	larry.step = 2;
+	larry.direction = 0;
+	larry.step = 20;
 
 	draw_delay = 2;
 
@@ -289,7 +296,7 @@ void setup_game() {
 	golden.g = colour(0xD7);
 	golden.b = colour(0x00);
 	golden.on_hit = []() -> void {
-		larry.step = 1;
+		larry.step = 10;
 		the_state.slow_bounce = 5;
 	};
 
