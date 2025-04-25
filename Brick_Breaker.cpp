@@ -13,7 +13,6 @@ using std::map;
 using std::pair;
 
 void init();
-void plot();
 void idle();
 
 float colour(float hex) {
@@ -28,6 +27,8 @@ void brick_init();
 void brick_breaker();
 void brickKeypress(unsigned char key, int x, int y);
 void brickKeyrelease(unsigned char key, int x, int y);
+void brickSpecialKeypress(int key, int x, int y);
+void brickSpecialKeyRelease(int key, int x, int y);
 
 struct BreakeableBricks;
 
@@ -53,6 +54,8 @@ int main(int argc, char** argv)
 
 	glutKeyboardFunc(brickKeypress);
 	glutKeyboardUpFunc(brickKeyrelease);
+	glutSpecialFunc(brickSpecialKeypress);
+	glutSpecialUpFunc(brickSpecialKeyRelease);
 	glutDisplayFunc(brick_breaker);
 	glutIdleFunc(idle);
 
@@ -74,18 +77,6 @@ void init() {
 
 void idle() {
 	glutPostRedisplay();
-}
-
-void plot() {
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	
-
- //   house(300, 200, 100, 50, 200, 600);
-	//fish(500, 500, 100, 50, 50);
-	
-	//mid_point_ellipse(500, 500, 200, 300);
-	glFlush();
 }
 
 
@@ -171,7 +162,7 @@ struct game_state {
 } the_state;
 
 void normal_hit(pair<int, int>, BreakeableBricks&) {
-	//larry.step = 2;
+	// do nothing
 }
 
 struct Brick {
@@ -191,19 +182,6 @@ void larry_go() {
 	larry.y += larry.down ? (-larry.step) : (+larry.step);
 
 	larry.x += larry.direction;
-
-	//switch (larry.direction) {
-	//case PlayerState::Left:
-	//	larry.x -= larry.step;
-	//	break;
-	//case PlayerState::Right:
-	//	larry.x += larry.step;
-	//	break;
-	//default:
-	//	break;
-	//}
-
-	//larry.x += (larry.direction == PlayerState::Left) ? (-larry.step) : (larry.step);
 
 	if (larry.x < 0) {
 		larry.x = 0;
@@ -233,9 +211,6 @@ void larry_go() {
 			if (larry.down) larry.down = false;
 
 			larry.direction = (larry.x - (player_x + player_length / 2)) * 70 / player_length;
-
-			//if (larry.x > player_x + player_length / 2) larry.direction = PlayerState::Right;
-			//else larry.direction = PlayerState::Left;
 		}
 	}
 
@@ -350,18 +325,6 @@ void brick_init() {
 	setup_game();
 }
 
-/// <summary>
-/// Use within a GL_QUADS block.
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-//void draw_player(int x, int y) {
-//	glVertex2d(x, y);
-//	glVertex2d(x + brick_length, y);
-//	glVertex2d(x + brick_length, y + brick_width);
-//	glVertex2d(x, y + brick_width);
-//}
-
 void draw_brick(int x, int y, const Brick& brick) {
 	glColor4f(brick.r, brick.g, brick.b, 1.0);
 	glVertex2d(x, y);
@@ -370,6 +333,11 @@ void draw_brick(int x, int y, const Brick& brick) {
 	glVertex2d(x, y + brick_width);
 }
 
+/// <summary>
+/// Use within a GL_QUADS block.
+/// </summary>
+/// <param name="x"></param>
+/// <param name="y"></param>
 void draw_player() {
 	glColor4f(colour(0xFF), colour(0xFF), colour(0xFF), 1.0);
 	glVertex2d(player_x, player_y);
@@ -422,7 +390,7 @@ void brickKeypress(unsigned char key, int x, int y) {
 	switch (key) {
 	case 'a':
 	case 'A':
-		player_state = PlayerState::Left;
+	player_state = PlayerState::Left;
 		break;
 	case 'd':
 	case 'D':
@@ -445,6 +413,19 @@ void brickKeypress(unsigned char key, int x, int y) {
 	}
 }
 
+void brickSpecialKeypress(int key, int x, int y) {
+	switch (key) {
+	case GLUT_KEY_LEFT:
+		player_state = PlayerState::Left;
+		break;
+	case GLUT_KEY_RIGHT:
+		player_state = PlayerState::Right;
+		break;
+	default:
+		break;
+	}
+}
+
 void brickKeyrelease(unsigned char key, int x, int y) {
 	switch (key) {
 	case 'a':
@@ -460,3 +441,15 @@ void brickKeyrelease(unsigned char key, int x, int y) {
 	}
 }
 
+void brickSpecialKeyRelease(int key, int x, int y) {
+	switch (key) {
+	case GLUT_KEY_LEFT:
+		if (player_state == PlayerState::Left) player_state = PlayerState::Still;
+		break;
+	case GLUT_KEY_RIGHT:
+		if (player_state == PlayerState::Right) player_state = PlayerState::Still;
+		break;
+	default:
+		break;
+	}
+}
