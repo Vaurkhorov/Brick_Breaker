@@ -29,6 +29,8 @@ void brick_breaker();
 void brickKeypress(unsigned char key, int x, int y);
 void brickKeyrelease(unsigned char key, int x, int y);
 
+struct BreakeableBricks;
+
 
 int main(int argc, char** argv)
 {
@@ -168,12 +170,12 @@ struct game_state {
 	}
 } the_state;
 
-void normal_hit() {
+void normal_hit(pair<int, int>, BreakeableBricks&) {
 	//larry.step = 2;
 }
 
 struct Brick {
-	std::function<void()> on_hit = normal_hit;
+	std::function<void(pair<int, int>, BreakeableBricks& bricks_to_break)> on_hit = normal_hit;
 
 	// colours
 	float r = 0.5;
@@ -244,8 +246,10 @@ void larry_go() {
 			if (it != bricks_to_break.bricks.end()) {
 				the_state.hit();
 				larry.down = !larry.down;
-				bricks_to_break.bricks[pair_to_check].on_hit();
+				
+				auto hit_brick = bricks_to_break.bricks[pair_to_check];
 				bricks_to_break.bricks.erase(it);
+				hit_brick.on_hit(pair_to_check, bricks_to_break);
 			}
 		}
 	}
@@ -291,11 +295,12 @@ void setup_game() {
 	Brick normal;
 	Brick golden;
 	Brick green;
+	Brick red;
 
 	golden.r = colour(0xFF);
 	golden.g = colour(0xD7);
 	golden.b = colour(0x00);
-	golden.on_hit = []() -> void {
+	golden.on_hit = [](pair<int, int>, BreakeableBricks&) -> void {
 		larry.step = 10;
 		the_state.slow_bounce = 5;
 	};
@@ -303,9 +308,17 @@ void setup_game() {
 	green.r = colour(0x22);
 	green.g = colour(0xFF);
 	green.b = colour(0x55);
-	green.on_hit = []() -> void {
+	green.on_hit = [](pair<int, int>, BreakeableBricks&) -> void {
 		player_length = default_player_length + green_powerup_length_difference;
 		the_state.big_player = green_powerup_duration;
+	};
+
+	red.r = colour(0xFF);
+	red.g = colour(0x00);
+	red.b = colour(0x00);
+	red.on_hit = [normal](pair<int, int> current_brick, BreakeableBricks& bricks_to_break) -> void {
+		bricks_to_break.bricks.erase(current_brick);
+		bricks_to_break.bricks.insert({ current_brick, normal });
 	};
 
 	int flippy = 0;
@@ -315,6 +328,7 @@ void setup_game() {
 			if (rng > 0.5) continue;
 			else if (rng > 0.48) bricks_to_break.bricks.insert({ std::make_pair(j, i), golden });
 			else if (rng > 0.46) bricks_to_break.bricks.insert({ std::make_pair(j, i), green });
+			else if (rng > 0.44) bricks_to_break.bricks.insert({ std::make_pair(j, i), red });
 			else bricks_to_break.bricks.insert({ std::make_pair(j, i), normal });
 		}
 		flippy = (int)!flippy;
