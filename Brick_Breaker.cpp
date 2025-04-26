@@ -84,7 +84,7 @@ void idle() {
 
 
 // BRICK START
-constexpr int brick_length = 2000;
+constexpr int brick_length = 1000;
 constexpr int brick_width = 200;
 
 constexpr int ortho_x = 10000;
@@ -435,9 +435,11 @@ void setup_game() {
 		bullet.x = player_x + player_length / 2;
 		bullet.y = player_y;
 
-		// if the player is in the right half of the screen then shoot left, and vice versa.
-		int factor = (((player_x + player_length) / 2) > ortho_x / 2) ? -1 : 1;
-		entity_memory[bullet.memory_id].push_back(((int)(random() * 5 + 5) * factor));
+		bullet.r = colour(random() * 0xFF / 2 + 0xFF / 2);
+		bullet.g = colour(random() * 0xFF / 2 + 0xFF / 2);
+		bullet.b = colour(random() * 0xFF / 2 + 0xFF / 2);
+
+		entity_memory[bullet.memory_id].push_back(((int)(random() * 20) - 10));
 
 		the_state.entities.push_back(bullet);
 	};
@@ -450,7 +452,7 @@ void setup_game() {
 			else if (rng > 0.48) bricks_to_break.bricks.insert({ std::make_pair(j, i), golden });
 			else if (rng > 0.46) bricks_to_break.bricks.insert({ std::make_pair(j, i), green });
 			else if (rng > 0.44) bricks_to_break.bricks.insert({ std::make_pair(j, i), red });
-			else if (rng > 0.42) bricks_to_break.bricks.insert({ std::make_pair(j, i), blue });
+			else if (rng > 0.32) bricks_to_break.bricks.insert({ std::make_pair(j, i), blue });
 			else bricks_to_break.bricks.insert({ std::make_pair(j, i), normal });
 		}
 		flippy = (int)!flippy;
@@ -520,7 +522,17 @@ void brick_breaker() {
 	}
 
 	if (winnerrr) {
-		if (((float)rand() / RAND_MAX) * 1000 > 950) {
+		if (larry.y < 30) {
+			larry.y = 30;
+		}
+		glPointSize(sleepy_barry.size);
+		glBegin(GL_POINTS);
+		for (Entity& it : the_state.entities) {
+			it.draw(it);
+		}
+		glEnd();
+
+		if (random() * 1000 > 950) {
 			larry.down = !larry.down;
 
 			glPointSize((float)rand() / RAND_MAX * 100.0);
@@ -528,6 +540,31 @@ void brick_breaker() {
 			larry.r = (float)rand() / RAND_MAX;
 			larry.g = (float)rand() / RAND_MAX;
 			larry.b = (float)rand() / RAND_MAX;
+
+			//if (random() * 10 > 7) {
+				Entity confetti;
+				confetti.memory_id = current_memory_id++;
+				confetti.x = larry.x;
+				confetti.y = larry.y;
+
+				confetti.r = colour(random() * 0xFF / 2 + 0xFF / 2);
+				confetti.g = colour(random() * 0xFF / 2 + 0xFF / 2);
+				confetti.b = colour(random() * 0xFF / 2 + 0xFF / 2);
+
+				entity_memory[confetti.memory_id].push_back(((int)(random() * 20) - 10));
+				entity_memory[confetti.memory_id].push_back(((int)(random() * 20) - 10));
+
+				confetti.move = [](Entity& entity) -> void {
+					entity.x += entity_memory[entity.memory_id][0];
+					entity.y += entity_memory[entity.memory_id][1];
+				};
+
+				the_state.entities.push_back(confetti);
+				if (the_state.entities.size() > 1000) {
+					std::reverse(the_state.entities.begin(), the_state.entities.end());
+					the_state.entities.resize(100, confetti);
+				}
+			//}
 		}
 	}
 
