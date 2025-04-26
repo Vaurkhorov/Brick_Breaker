@@ -4,6 +4,7 @@
 #include <map>
 #include <limits>
 #include <functional>
+#include <vector>
 
 
 #include <GL/glut.h>
@@ -11,6 +12,7 @@
 
 using std::map;
 using std::pair;
+using std::vector;
 
 void init();
 void idle();
@@ -31,6 +33,7 @@ void brickSpecialKeypress(int key, int x, int y);
 void brickSpecialKeyRelease(int key, int x, int y);
 
 struct BreakeableBricks;
+struct Entity;
 
 
 int main(int argc, char** argv)
@@ -140,6 +143,8 @@ struct game_state {
 	int slow_bounce = 0;
 	int big_player = 0;
 
+	vector<Entity> entities = vector<Entity>();
+
 	void hit() {
 		if (slow_bounce > 0) {
 			slow_bounce--;
@@ -177,6 +182,67 @@ struct Brick {
 struct BreakeableBricks {
 	map<pair<int, int>, Brick> bricks;
 } bricks_to_break;
+
+map<int, vector<int>> entity_memory;
+int current_memory_id = 0;
+
+
+struct Entity {
+	int x = 0;
+	int y = 0;
+
+	float r = 1.0;
+	float g = 1.0;
+	float b = 1.0;
+
+
+
+	// I like to think that this is a little clever.
+	// Each entity essentially has its own memory in the form of integer arrays.
+	// This memory is in no way safe, but it isn't meant to be.
+	// But it allows any function to store basically arbitrary data as needed.
+	int memory_id;
+	Entity() {
+		memory_id = current_memory_id++;
+	}
+
+
+	// The member functions below take an entity object as an argument,
+	// even though they aren't static.
+	// I did this for two reasons. I'm not fully sure if the reasons are correct, though.
+	// One, they aren't member functions, and can't access other member variables normally.
+	// Two, there *is* a possibility that the function is copied and stored somewhere like a normal variable.
+	// So if I were to capture the object within it, the function could outlive the object somehow.
+	// It is an unlikely situation. Why would you copy the function?
+	// But if it does happen, say, to defer execution, aur kahi koi dangling reference reh gaya,
+	// toh I believe larry ka sutli bomb ban jaayega. >:3
+
+	std::function<void(Entity&)> move = [](Entity&) -> void {
+		// do nothing
+		};
+
+	std::function<void(Entity&)> draw = [](Entity& self) -> void {
+		glBegin(GL_POINTS);
+		glColor4f(self.r, self.g, self.b, 1.0);
+		glVertex2i(self.x, self.y);
+		glEnd();
+		};
+
+	/// <summary>
+	/// If it returns false, the entity is deleted.
+	/// </summary>
+	std::function<bool(Entity&)> hit_border = [](Entity& self) -> bool {
+		return false;
+		};
+
+	std::function<bool(Entity&)> on_hit_player = [](Entity& self) -> bool {
+		return false;
+		};
+
+	std::function<bool(Entity&, pair<int, int>, BreakeableBricks&)> on_hit_block = [](Entity&, pair<int, int>, BreakeableBricks&) -> bool {
+		return false;
+		};
+};
 
 void larry_go() {
 	larry.y += larry.down ? (-larry.step) : (+larry.step);
@@ -230,6 +296,45 @@ void larry_go() {
 	}
 }
 
+void handle_entities() {
+	// Don't draw them here, that'll be handled by a separate function.
+	vector<Entity> retained_entities;
+	for (Entity& it : the_state.entities) {
+		it.move(it);
+
+		if (it.x < 0 || it.x > ortho_x || it.y < 0 || it.y > ortho_y) {
+			if (it.hit_border(it)) {
+				retained_entities.push_back(it);
+				continue;
+			}
+		}
+
+		if (it.x > player_x && it.x < player_x + player_length && it.y > player_y && it.y < player_y + brick_width) {
+			if (it.on_hit_player(it)) {
+				retained_entities.push_back(it);
+				continue;
+			}
+		}
+		
+		if (it.y >= bricks_start_y) {
+			if ((it.y - bricks_start_y) % brick_width <= 50 || (it.y - bricks_start_y) % brick_width >= brick_width - 50) {
+				auto pair_to_check = std::make_pair(((it.x / brick_length) * brick_length), it.y / brick_width * brick_width);
+				if (bricks_to_break.bricks.find(pair_to_check) != bricks_to_break.bricks.end()) {
+					if (it.on_hit_block(it, pair_to_check, bricks_to_break)) {
+						retained_entities.push_back(it);
+						continue;
+					}
+				}
+			}
+		}
+
+		retained_entities.push_back(it);
+	}
+
+	the_state.entities.clear();
+	the_state.entities = std::move(retained_entities);
+}
+
 void player_move() {
 	switch (player_state) {
 	case PlayerState::Left:
@@ -271,6 +376,9 @@ void setup_game() {
 	Brick golden;
 	Brick green;
 	Brick red;
+	Brick blue;
+
+	Entity player_bullet;
 
 	golden.r = colour(0xFF);
 	golden.g = colour(0xD7);
@@ -296,6 +404,44 @@ void setup_game() {
 		bricks_to_break.bricks.insert({ current_brick, normal });
 	};
 
+	player_bullet.r = colour(0xFF);
+	player_bullet.g = colour(0x00);
+	player_bullet.b = colour(0x00);
+	player_bullet.on_hit_block = [](Entity&, pair<int, int> brick_pos, BreakeableBricks& bricks_to_break) -> bool {
+		bricks_to_break.bricks.erase(bricks_to_break.bricks.find(brick_pos));
+		return true;
+	};
+	player_bullet.on_hit_player = [](Entity&) -> bool {
+		return true;
+	};
+	player_bullet.hit_border = [](Entity&) -> bool {
+		return false;
+	};
+	player_bullet.move = [](Entity& bullet) -> void {
+		bullet.y += 10;
+		bullet.x += (entity_memory[bullet.memory_id])[0];
+	};
+	player_bullet.draw = [](Entity& bullet) -> void {
+		glColor3f(bullet.r, bullet.g, bullet.b);
+		glVertex2i(bullet.x, bullet.y);
+	};
+
+	blue.r = colour(0x00);
+	blue.g = colour(0x00);
+	blue.b = colour(0xFF);
+	blue.on_hit = [player_bullet](pair<int, int>, BreakeableBricks& bricks_to_break) -> void {
+		Entity bullet = player_bullet;
+		bullet.memory_id = current_memory_id++;
+		bullet.x = player_x + player_length / 2;
+		bullet.y = player_y;
+
+		// if the player is in the right half of the screen then shoot left, and vice versa.
+		int factor = (((player_x + player_length) / 2) > ortho_x / 2) ? -1 : 1;
+		entity_memory[bullet.memory_id].push_back(((int)(random() * 5 + 5) * factor));
+
+		the_state.entities.push_back(bullet);
+	};
+
 	int flippy = 0;
 	for (int i = bricks_start_y; i < ortho_y; i += brick_width) {
 		for (int j = 0; j < ortho_x; j += brick_length) {
@@ -304,6 +450,7 @@ void setup_game() {
 			else if (rng > 0.48) bricks_to_break.bricks.insert({ std::make_pair(j, i), golden });
 			else if (rng > 0.46) bricks_to_break.bricks.insert({ std::make_pair(j, i), green });
 			else if (rng > 0.44) bricks_to_break.bricks.insert({ std::make_pair(j, i), red });
+			else if (rng > 0.42) bricks_to_break.bricks.insert({ std::make_pair(j, i), blue });
 			else bricks_to_break.bricks.insert({ std::make_pair(j, i), normal });
 		}
 		flippy = (int)!flippy;
@@ -351,6 +498,7 @@ void brick_breaker() {
 
 	player_move();
 	larry_go();
+	handle_entities();
 
 	bool winnerrr = bricks_to_break.bricks.empty() && !game_over;
 
@@ -361,6 +509,12 @@ void brick_breaker() {
 		glColor4f(colour(0xFF), colour(0x55), colour(0x55), 1.0);
 		for (auto& it : bricks_to_break.bricks) {
 			draw_brick(it.first.first, it.first.second, it.second);
+		}
+		glEnd();
+
+		glBegin(GL_POINTS);
+		for (Entity& it : the_state.entities) {
+			it.draw(it);
 		}
 		glEnd();
 	}
